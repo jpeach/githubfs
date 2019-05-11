@@ -1,0 +1,8 @@
+linters-settings:
+  nakedret:
+    max-func-lines: 1
+
+
+
+
+# vim: set et sts=2 ts=2 sw=2 :
