@@ -4,8 +4,11 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/google/go-github/v25/github"
 	"github.com/jpeach/githubfs/pkg/fs"
@@ -71,21 +74,73 @@ func New(options ...Option) (fs.Repository, error) {
 	return r, nil
 }
 
-func (r *repository) Readdir(path string) error {
-	tree, _, err := r.Client.Git.GetTree(
+// ReadDir reads a directory from the GitHub repository. Note that
+// this uses the GitHub GetContents API, which is documented to only
+// return up to 1000 entries.
+//
+// See https://developer.github.com/v3/repos/contents/#get-contents.
+func (r *repository) ReadDir(dirname string) ([]os.FileInfo, error) {
+	file, dirent, resp, err := r.Client.Repositories.GetContents(
 		context.TODO(),
 		r.Owner,
 		r.Repo,
-		r.Ref,
-		false /* recursive */)
+		path.Clean(dirname),
+		&github.RepositoryContentGetOptions{
+			Ref: r.Ref,
+		})
 	if err != nil {
-		return err
+		return nil, wrapResponseError(resp, err)
 	}
 
-	fmt.Printf("%s\n", tree)
-	return nil
+	// The path is a file, not a directory.
+	if file != nil {
+		return nil, fmt.Errorf("failed to read %s: %w",
+			dirname, syscall.ENOTDIR)
+	}
+
+	// It's not a path, not an error, and not a directory. Who knows?
+	if dirent == nil {
+		return nil, fmt.Errorf("failed to read %s: %w",
+			dirname, syscall.EIO)
+	}
+
+	info := make([]os.FileInfo, 0, len(dirent))
+	for _, entry := range dirent {
+		info = append(info, FileInfoFromContent(entry))
+	}
+
+	return info, nil
 }
 
-func (r *repository) Stat(path string) error {
-	return fmt.Errorf("not implemented")
+func (r *repository) ReadFile(filename string) ([]byte, error) {
+	return nil, fmt.Errorf("not implemented")
+}
+
+func (r *repository) Lookup(pathname string) (os.FileInfo, error) {
+	file, dirent, resp, err := r.Client.Repositories.GetContents(
+		context.TODO(),
+		r.Owner,
+		r.Repo,
+		path.Clean(pathname),
+		&github.RepositoryContentGetOptions{
+			Ref: r.Ref,
+		})
+	if err != nil {
+		return nil, wrapResponseError(resp, err)
+	}
+
+	if file != nil {
+		return FileInfoFromContent(file), nil
+	}
+
+	if dirent != nil {
+		return &FileInfo{
+			name:  path.Base(pathname),
+			mtime: time.Now(),
+			ftype: FileTypeDirectory,
+		}, nil
+	}
+
+	return nil, fmt.Errorf("failed to lookup '%s': %w",
+		pathname, syscall.EIO)
 }

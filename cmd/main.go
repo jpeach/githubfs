@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 
@@ -42,7 +41,7 @@ func main() {
 		client.Transport = &loghttp.Transport{}
 	}
 
-	repo, err := githubfs.New(
+	_, err := githubfs.New(
 		githubfs.RepositoryOption(flag.Arg(0)),
 		githubfs.ClientOption(client),
 	)
@@ -50,9 +49,5 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%s: %s\n", Progname, err)
 		os.Exit(sysexits.EX_SOFTWARE)
-	}
-
-	if err := repo.Readdir("/"); err != nil {
-		log.Printf("%s", err)
 	}
 }
