@@ -15,7 +15,8 @@ import (
 	"golang.org/x/exp/errors/fmt"
 )
 
-type repository struct {
+// Repository struct {
+type Repository struct {
 	Client *github.Client
 	HTTP   *http.Client
 	URL    *url.URL
@@ -26,11 +27,11 @@ type repository struct {
 }
 
 // Option is a githubfs repository client creation option.
-type Option func(*repository) error
+type Option func(*Repository) error
 
 // ClientOption ...
 func ClientOption(c *http.Client) Option {
-	return func(r *repository) error {
+	return func(r *Repository) error {
 		r.HTTP = c
 		return nil
 	}
@@ -38,7 +39,7 @@ func ClientOption(c *http.Client) Option {
 
 // RepositoryOption ...
 func RepositoryOption(repoURL string) Option {
-	return func(r *repository) error {
+	return func(r *Repository) error {
 		u, err := url.Parse(repoURL)
 		if err != nil {
 			return fmt.Errorf(
@@ -52,7 +53,7 @@ func RepositoryOption(repoURL string) Option {
 
 // New ...
 func New(options ...Option) (fs.Repository, error) {
-	r := &repository{
+	r := &Repository{
 		Ref: "master",
 	}
 
@@ -74,12 +75,26 @@ func New(options ...Option) (fs.Repository, error) {
 	return r, nil
 }
 
+func (r *Repository) ReadTree() (*github.Tree, error) {
+	tree, resp, err := r.Client.Git.GetTree(
+		context.TODO(),
+		r.Owner,
+		r.Repo,
+		r.Ref,
+		true /* Recursive */)
+	if err != nil {
+		return nil, wrapResponseError(resp, err)
+	}
+
+	return tree, nil
+}
+
 // ReadDir reads a directory from the GitHub repository. Note that
 // this uses the GitHub GetContents API, which is documented to only
 // return up to 1000 entries.
 //
 // See https://developer.github.com/v3/repos/contents/#get-contents.
-func (r *repository) ReadDir(dirname string) ([]os.FileInfo, error) {
+func (r *Repository) ReadDir(dirname string) ([]os.FileInfo, error) {
 	file, dirent, resp, err := r.Client.Repositories.GetContents(
 		context.TODO(),
 		r.Owner,
@@ -112,11 +127,11 @@ func (r *repository) ReadDir(dirname string) ([]os.FileInfo, error) {
 	return info, nil
 }
 
-func (r *repository) ReadFile(filename string) ([]byte, error) {
+func (r *Repository) ReadFile(filename string) ([]byte, error) {
 	return nil, fmt.Errorf("not implemented")
 }
 
-func (r *repository) Lookup(pathname string) (os.FileInfo, error) {
+func (r *Repository) Lookup(pathname string) (os.FileInfo, error) {
 	file, dirent, resp, err := r.Client.Repositories.GetContents(
 		context.TODO(),
 		r.Owner,
